@@ -30,8 +30,8 @@ class Proxy:
 		self.debug = False
 
 	def handle_reqs(self, request):
-    print self._color_code('okgreen', request.first_line)
-    return request	#do not change this line
+		print self._color_code('okgreen', request.first_line)
+		return request	#do not change this line
 
 	def handle_resps(self, response, host):
 		print self._color_code('okblue', host+': '+response.first_line)
@@ -61,13 +61,13 @@ class Proxy:
 			self._log('no request: closing')
 			conn.close()
 			sys.exit(1)	
-    #process request to allow for on-the-fly changes	
+		#process request to allow for on-the-fly changes	
 		request_obj = HTTPRequest(request)
 		http_host, http_port = request_obj.headers['Host'], 80
 		request_obj = self.handle_reqs(request_obj)
 		request = request_obj.make_raw()		
 		self._log('got host '+http_host+', port '+str(http_port))
-    #check blacklist
+		#check blacklist
 		if http_host in self.blacklist:
 			self._log('host in blacklist: closing')
 			conn.close() 
