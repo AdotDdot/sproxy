@@ -20,7 +20,7 @@ import sys
 import threading
 
 class Proxy:
-	def __init__(self, serv_port):
+	def __init__(self, serv_port = 50007):
 		self.serv_host = ''
 		self.serv_port = serv_port
 		self.blacklist = []
