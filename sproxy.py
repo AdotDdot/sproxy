@@ -30,11 +30,11 @@ class Proxy:
 		self.debug = False
 
 	def handle_reqs(self, request):
-		print self._color_code('okgreen', request.first_line)
+		print '\n'+self._color_code('okgreen', request.first_line)
 		return request	#do not change this line
 
 	def handle_resps(self, response, host):
-		print self._color_code('okblue', host+': '+response.first_line)
+		print '\n'+self._color_code('okblue', host+': '+response.first_line)
 
 	def start(self):
 		try:
@@ -88,7 +88,7 @@ class Proxy:
 			wclient.connect((hostip, port))
 			self._log('client to host '+host+' connected')
 		except socket.timeout: 
-			print self._color_code('fail', '\nSocket timed out on '+host)
+			print self._color_code('fail', '\nImpossible to connect to '+host+': socket timed out)
 			wclient.close()
 			conn.close()
 			sys.exit(1) 
