@@ -88,7 +88,7 @@ class Proxy:
 			wclient.connect((hostip, port))
 			self._log('client to host '+host+' connected')
 		except socket.timeout: 
-			print self._color_code('fail', '\nImpossible to connect to '+host+': socket timed out)
+			print self._color_code('fail', '\nImpossible to connect to '+host+': socket timed out')
 			wclient.close()
 			conn.close()
 			sys.exit(1) 
