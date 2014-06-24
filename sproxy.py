@@ -18,9 +18,10 @@
 import socket
 import sys
 import threading
+import time
 
 class Proxy:
-	def __init__(self, serv_port = 50007):
+	def __init__(self, serv_port = 50007, certfile = "/etc/ssl/certs/ca-certificates.crt"):
 		self.serv_host = ''
 		self.serv_port = serv_port
 		self.blacklist = []
@@ -28,13 +29,19 @@ class Proxy:
 		self.web_timeout = 1
 		self.buffer_size = 4096
 		self.debug = False
+		self.certfile = certfile
+		self.stdout_lock = threading.Lock()
 
 	def handle_reqs(self, request):
-		print '\n'+self._color_code('okgreen', request.first_line)
+		self.stdout_lock.acquire()
+		print '\n'+str(time.time()), '\t'+self._color_code('okgreen', request.first_line)
+		self.stdout_lock.release()
 		return request	#do not change this line
 
 	def handle_resps(self, response, host):
-		print '\n'+self._color_code('okblue', host+': '+response.first_line)
+		self.stdout_lock.acquire()
+		print '\n'+str(time.time()), '\t'+self._color_code('okblue', host+': '+response.first_line)
+		self.stdout_lock.release()
 
 	def start(self):
 		try:
@@ -42,7 +49,7 @@ class Proxy:
 			serv_sock.bind((self.serv_host, self.serv_port))
 			serv_sock.listen(200)
 			print 'Proxy running on port', self.serv_port, ': listening'	
-		except socket.error, (value, message): 
+		except socket.error, (value, message):
 			print self._color_code('fail', 'Could not open socket: error '+str(value)+' - '+message)
 			sys.exit(1)
 		#mainloop
@@ -54,58 +61,68 @@ class Proxy:
 			except: conn.close()
 		serv_sock.close()
 
-	def _handle_conn(self, conn):				
+	def _handle_conn(self, conn):	
 		conn.settimeout(self.browser_timeout)
-		request = self._recv_pipe(conn)					
+		request = self._recv_pipe(conn)	
 		if not request:
 			self._log('no request: closing')
 			conn.close()
 			sys.exit(1)	
-		#process request to allow for on-the-fly changes	
+		#process request to allow for user changes
 		request_obj = HTTPRequest(request)
 		http_host, http_port = request_obj.headers['Host'], 80
 		request_obj = self.handle_reqs(request_obj)
-		request = request_obj.make_raw()		
+		request = request_obj.make_raw()	
 		self._log('got host '+http_host+', port '+str(http_port))
 		#check blacklist
 		if http_host in self.blacklist:
 			self._log('host in blacklist: closing')
-			conn.close() 
-			sys.exit(1)
-		response = self._send_resp(http_host, http_port, conn, request)
+			conn.close()
+			sys.exit(1) 
+		tunneling = request_obj.method == 'CONNECT'
+		#get and send response
+		self._send_resp(http_host, http_port, conn, request, tunneling)
 		conn.close()
-		if response: 
-			response_obj = HTTPResponse(response)
-			self.handle_resps(response_obj, http_host)
-
-	def _send_resp(self, host, port, conn, req):
-		#make client socket to host	
+				
+	def _send_resp(self, host, port, conn, req, tunneling):
+		if tunneling: port = 443
 		wclient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self._log('client to host '+host+' initialized')
 		wclient.settimeout(self.web_timeout)
-		try: 
+		try:
 			hostip = socket.gethostbyname(host)
 			wclient.connect((hostip, port))
 			self._log('client to host '+host+' connected')
-		except socket.timeout: 
+		except socket.timeout:
 			print self._color_code('fail', '\nImpossible to connect to '+host+': socket timed out')
 			wclient.close()
 			conn.close()
-			sys.exit(1) 
+			sys.exit(1)
 		except socket.error, (value, message):
 			print self._color_code('fail', '\nSocket error '+str(value)+' '+message+' on '+host)
 			wclient.close()
 			conn.close()
 			sys.exit(1)
-		#send request
-		wclient.send(req)
-		self._log('request sent to host '+host)
-		#get response
-		response = self._recv_pipe(wclient, conn)		
+		if tunneling: 
+			conn.send(b'HTTP/1.1 200 Connection estabilished\n\n')
+			self._log('connection estabilished')
+			req = self._recv_pipe(conn)
+                while 1:
+		        wclient.send(req)
+		        self._log('request sent to host '+host)
+		        response = self._recv_pipe(wclient, conn)
+                        if not response: break
+			elif not tunneling:
+			        response_obj = HTTPResponse(response)
+			        self.handle_resps(response_obj, host)	
+                        req = self._recv_pipe(conn)
+                        if not req: break
+			elif not tunneling:
+				req_obj = HTTPRequest(req)
+				self.handle_reqs(req_obj)
 		wclient.close()
 		self._log('connection to client and connection to host '+host+' closed')
-		return response
-		
+
 	def _recv_pipe(self, from_conn, to_conn = ''):
 		msg = []
 		gotnull = 0
@@ -113,19 +130,18 @@ class Proxy:
 			try:
 				msg_pack = from_conn.recv(self.buffer_size)
 			except socket.timeout:
-				self._log('timeout on receiving data packet: breaking loop') 	
+				self._log('timeout on receiving data packet: breaking loop')
 				break
-			if not msg_pack: 
+			if not msg_pack:
 				if gotnull: self._log('no more data: breaking loop'); break
 				else: gotnull = 1
-			else: 
+			else:
 				self._log('got data packet of len '+str(len(msg_pack)))
 				msg.append(msg_pack)
-				if to_conn: 
-					try:
-						to_conn.send(msg_pack)
-					except socket.error, (value, message): 
-						print self._color_code('fail', 'Impossible to send response: got error '+str(value)+' - '+message)
+				if to_conn:
+					try: to_conn.send(msg_pack)
+					except socket.error, (value, message):
+						print self._color_code('fail', '\nImpossible to send response: got error '+str(value)+' - '+message)
 						from_conn.close()
 						to_conn.close()
 						sys.exit(1)
@@ -134,8 +150,9 @@ class Proxy:
 	def _log(self, line):
 		if self.debug: print line
 		else: pass
-	
-	def _color_code(self, code, line):		
+
+	def _color_code(self, code, line):
+		line = str(line)	
 		if not sys.stdout.isatty(): return line
 		else:
 			endb = "\033[0m"
@@ -145,14 +162,15 @@ class Proxy:
 			elif code == 'okblue': return '\033[1;94m'+line+endb
 			elif code == 'pblue': return '\033[94m'+line+endb
 			elif code == 'pgreen': return '\033[92m'+line+endb
+			elif code == 'pyell': return '\033[93m'+line+endb
 			else: return line
 
 
 class HTTPRequest:
 	def __init__(self, raw_req):
-		self.raw = raw_req 
+		self.raw = raw_req
 		self._set_parts()
-	
+
 	def _set_parts(self):
 		self.head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').split('\n\n')[0])
 		self.body = self.raw.replace(self.head.encode(), b'').replace(b'\n\n', b'')
@@ -160,7 +178,7 @@ class HTTPRequest:
 		self.headers = dict([x.split(': ', 1) for x in self.head.splitlines()[1:]])
 		self.method, self.url, self.protov = self.first_line.split(' ', 2)
 		return (self.head, self.body, self.first_line, self.headers, self.method, self.url, self.protov)
-		
+
 	def set_header(self, header, value):
 		self.headers[header] = value
 
@@ -171,24 +189,21 @@ class HTTPRequest:
 		return b'\n\n'.join([head.encode(), self.body])
 
 
-
-
 class HTTPResponse:
 	def __init__(self, raw_resp):
 		self.raw = raw_resp
 		self.head, self.body, self.first_line, self.headers, self.proto, self.status, self.status_text = self._set_parts()
-		
+
 	def _set_parts(self):
 		head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').split('\n\n')[0])
 		body = self.raw.replace(head.encode(), b'').replace(b'\n\n', b'')
 		first_line = head.splitlines()[0]
 		headers = dict(x.split(': ', 1) for x in head.splitlines()[1:])
 		proto, status, status_text = first_line.split(' ', 2)
-		return (head, body, first_line, headers, proto, status, status_text)		
+		return (head, body, first_line, headers, proto, status, status_text)	
 
 
 if __name__ == '__main__':
   serv_port = int(sys.argv[1]) if len(sys.argv) > 1 else 50007
   proxy = Proxy()
   proxy.start()
-		
