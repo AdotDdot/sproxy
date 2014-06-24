@@ -205,5 +205,6 @@ class HTTPResponse:
 
 if __name__ == '__main__':
   serv_port = int(sys.argv[1]) if len(sys.argv) > 1 else 50007
-  proxy = Proxy()
+  certfile = sys.argv[2] if len(sys.argv) > 2 else "/etc/ssl/certs/ca-certificates.crt"
+  proxy = Proxy(serv_port, certfile)
   proxy.start()
