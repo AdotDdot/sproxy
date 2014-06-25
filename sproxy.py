@@ -81,7 +81,6 @@ class Proxy:
 			self._log('host in blacklist: closing')
 			conn.close()
 			sys.exit(1) 
-		
 		#get and send response
 		self._send_resp(http_host, http_port, conn, request, tunneling)
 		conn.close()
@@ -115,7 +114,8 @@ class Proxy:
                         if not response: break
 			elif not tunneling:
 			        response_obj = HTTPResponse(response)
-			        self.handle_resps(response_obj, host)	
+			        self.handle_resps(response_obj, host)
+			        break
                         req = self._recv_pipe(conn)
                         if not req: break
 			elif not tunneling:
