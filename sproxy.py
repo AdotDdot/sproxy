@@ -36,7 +36,6 @@ class Proxy:
 		self.stdout_lock.acquire()
 		print '\n'+str(time.time()), '\t'+self._color_code('okgreen', request.first_line)
 		self.stdout_lock.release()
-		return request	#do not change this line
 
 	def handle_resps(self, response, host):
 		self.stdout_lock.acquire()
@@ -73,7 +72,7 @@ class Proxy:
 		tunneling = request_obj.method == 'CONNECT'
 		http_host = request_obj.headers['Host']
 		http_port = 443 if tunneling else 80
-		request_obj = self.handle_reqs(request_obj)
+		self.handle_reqs(request_obj)
 		request = request_obj.make_raw()	
 		self._log('got host '+http_host+', port '+str(http_port))
 		#check blacklist
