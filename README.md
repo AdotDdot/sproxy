@@ -21,7 +21,6 @@ To customize requests and response handling, override the Proxy class' handle_re
       def handle_reqs(self, request):
         request.set_header('User-Agent', 'Python Proxy') #modify request header
         print request.first_line
-        return request #this line must always be present
         
       def handle_resps(self, response, host):
         print 'Got a response from', host
