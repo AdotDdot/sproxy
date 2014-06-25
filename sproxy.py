@@ -173,8 +173,7 @@ class HTTPRequest:
 		self._set_parts()
 
 	def _set_parts(self):
-		self.head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').split('\n\n')[0])
-		self.body = self.raw.replace(self.head.encode(), b'').replace(b'\n\n', b'')
+		self.head, self.body = self.raw.replace(b'\r\n\r\n', b'\n\n').split('\n\n')
 		self.first_line = self.head.splitlines()[0]
 		self.headers = dict([x.split(': ', 1) for x in self.head.splitlines()[1:]])
 		self.method, self.url, self.protov = self.first_line.split(' ', 2)
