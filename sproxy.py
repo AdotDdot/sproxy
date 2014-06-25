@@ -70,7 +70,9 @@ class Proxy:
 			sys.exit(1)	
 		#process request to allow for user changes
 		request_obj = HTTPRequest(request)
-		http_host, http_port = request_obj.headers['Host'], 80
+		tunneling = request_obj.method == 'CONNECT'
+		http_host = request_obj.headers['Host']
+		http_port = 443 if tunneling else 80
 		request_obj = self.handle_reqs(request_obj)
 		request = request_obj.make_raw()	
 		self._log('got host '+http_host+', port '+str(http_port))
@@ -79,13 +81,12 @@ class Proxy:
 			self._log('host in blacklist: closing')
 			conn.close()
 			sys.exit(1) 
-		tunneling = request_obj.method == 'CONNECT'
+		
 		#get and send response
 		self._send_resp(http_host, http_port, conn, request, tunneling)
 		conn.close()
 				
 	def _send_resp(self, host, port, conn, req, tunneling):
-		if tunneling: port = 443
 		wclient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self._log('client to host '+host+' initialized')
 		wclient.settimeout(self.web_timeout)
