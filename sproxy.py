@@ -53,7 +53,7 @@ class Proxy:
 		ctype = response.headers['Content-Type'] if 'Content-Type' in response.headers else ''
 		url = 'https://'+host+request.url
 		self.stdout_lock.acquire()
-		print '\n'+self._color_code('warn', request.first_line.replace(request.url, url))
+		print '\n'+self._color_code('warn', request.first_line.replace(request.url, url, 1))
 		print '  '+self._color_code('okblue', response.first_line+'  '+clength+'  '+ctype)
 		self.stdout_lock.release()
 		
