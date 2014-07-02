@@ -50,7 +50,7 @@ For output customization, response parsing etc, you can modify or override the m
 
 Known issues
 ===========
-* Parsing of requests and responses in order to init class instances needs adjusting: initialization unsuccessful in certain cases
+* Parsing of requests and responses in order to init class instances needs adjusting: initialization and output unsuccessful in certain cases.
 * In certain cases an https connection is refused for causes yet not found.
 
 
