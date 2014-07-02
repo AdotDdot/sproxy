@@ -1,41 +1,57 @@
 sproxy
 ======
 
-Simple customizable http proxy written in python using the socket module.
+Simple customizable interception proxy written in python using the socket module.
+Capable of intercepting https traffic generating certificates on the fly.
 
+Setting up
+==========
+Run *sproxy-setup.py*. It will set up the needed directories and files and create the self-signed CA certificate. The serial number of the certificate can be specified when running the script.
+
+    python sproxy-setup.py [certserial]
+    
+In order to allow https interception, you will need to register Sproxy as a trusted certificate authority in your browser.
 
 Example usage
 =============
-The proxy can be launched with default options from command line. By default is simply prints the first line of each request and response. The default port is 50007.
+The proxy can be launched with default options from the command line. By default is simply prints the first line of each request and response. The default port is 50007. You will need to provide the local certificates file. It defaults to */etc/ssl/certs/ca-certificates.crt*, the most widely used path in Linux systems. 
     
-    python sproxy.py [port] [certfile]
+    python sproxy.py [port] [localcertfile]
     
-The proxy is capable of browsing over https, but it isn't possible to view or modify ssl traffic (yet).
-If browsing over https, it is necessary to init the proxy providing the local certificates file. It defaults to */etc/ssl/certs/ca-certificates.crt*, the most widely used path in Linux systems. 
 
-To customize requests and response handling, override the Proxy class' handle_reqs and handle_resps methods. The method handle_reqs accepts as argument a HTTPRequest class instance and also allows for modifications of requests. The method handle_resps accepts as arguments a HTTPResponse class instance and the response host.
+You can alter the requests sent modifying or overriding the Proxy class' method handle_reqs.
+For output customization, response parsing etc, you can modify or override the method handle_flow and handle_https_flow.
 
 
     from sproxy import Proxy
     class MyProxy(Proxy):
       def handle_reqs(self, request):
-        request.set_header('User-Agent', 'Python Proxy') #modify request header
-        print request.first_line
+        request.set_header('User-Agent', 'sproxy')
         
-      def handle_resps(self, response, host):
+      def handle_flow(self, request, response, host):
         print 'Got a response from', host
+        print response.head
+        
+    def handle_https_flow(self, request, response, host):
+        print 'Got a response over ssl from', host
         print response.head
     
     proxy = MyProxy()
     
     #set some options
-    proxy.blacklist = ['www.google.com', 'www.yahoo.com'] #blacklist some hosts
-    proxy.serv_port = 10000 #modify port
+    proxy.blacklist = ['www.google.com', 'www.yahoo.com'] 
+    proxy.serv_port = 10000
+    #change timeouts to alter performance
     proxy.web_timeout = 0.5
-    proxy.browser_timeout = 0.5 #you can change the timeouts to alter performance
+    proxy.browser_timeout = 0.5 
     
     #launch proxy
     proxy.start()
 
+Known issues
+===========
+
+    * Parsing of requests and responses in order to init class instances needs adjusting: initialization unsuccessful in certain cases
+    * In certain cases an https connection is refused.
 
 
