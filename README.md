@@ -29,11 +29,11 @@ For output customization, response parsing etc, you can modify or override the m
         request.set_header('User-Agent', 'sproxy')
         
       def handle_flow(self, request, response, host):
-        print 'Got a response from', host
+        print request.head
         print response.head
         
     def handle_https_flow(self, request, response, host):
-        print 'Got a response over ssl from', host
+        print request.head
         print response.head
     
     proxy = MyProxy()
