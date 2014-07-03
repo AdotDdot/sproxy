@@ -273,12 +273,12 @@ class HTTPResponse:
 
 class CertFactory:
 	def __init__(self):
-		self._cache_dir = 'sproxy_files'
-		self._sid = os.path.join(self._cache_dir,'sid.txt')
+		self._files_dir = 'sproxy_files'
+		self._sid = os.path.join(self._files_dir,'sid.txt')
 		with open(self._sid, 'rt') as sid: self._count = int(sid.read())
 		self._count_lock = threading.Lock()
-		self.root_cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(os.path.join(self._cache_dir, 'sproxy.pem')).read())
-		self.root_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(os.path.join(self._cache_dir, 'sproxy.key')).read())
+		self.root_cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(os.path.join(self._files_dir, 'sproxy.pem')).read())
+		self.root_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(os.path.join(self._files_dir, 'sproxy.key')).read())
 		self.issuer= self.root_cert.get_subject()
 			
 	def make_cert(self, pem_data):
@@ -303,8 +303,8 @@ class CertFactory:
 		self._count_lock.release()		
 		new_cert.set_pubkey(pkey)
 		new_cert.sign(self.root_key, 'sha1')
-		certfile = os.path.join( self._cache_dir, common_name+'.pem',)
-		keyfile = os.path.join( self._cache_dir, common_name+'.key')		
+		certfile = os.path.join( self._files_dir, common_name+'.pem',)
+		keyfile = os.path.join( self._files_dir, common_name+'.key')		
 		#write key and cert
 		with open(certfile, "wt") as cf: cf.write(crypto.dump_certificate(crypto.FILETYPE_PEM, new_cert))
 		with open(keyfile, "wt") as kf: kf.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, pkey))
