@@ -21,20 +21,20 @@ from sys import argv
 
 serial = int(argv[1]) if len(argv) > 1 else 1
 
-#make cache directory
-cache_dir = 'sproxy_files'
-if not os.path.isdir(cache_dir): os.mkdir(cache_dir)
+#make files directory
+files_dir = 'sproxy_files'
+if not os.path.isdir(files_dir): os.mkdir(files_dir)
 
-#make sid file in cache directory to store last used serial number
-sid_file = os.path.join('sproxy_files', 'sid.txt')
+#make sid file in files directory to store last used serial number
+sid_file = os.path.join(files_dir, 'sid.txt')
 if not os.path.isfile(sid_file):
 	sid = open(sid_file, 'w')
 	sid.write('0')
 	sid.close()
 
-#make root certificates in cache directory
-CERT_FILE = os.path.join(cache_dir, "sproxy.pem")
-KEY_FILE = os.path.join(cache_dir, "sproxy.key")
+#make root certificate in cache directory
+CERT_FILE = os.path.join(files_dir, "sproxy.pem")
+KEY_FILE = os.path.join(files_dir, "sproxy.key")
 k = crypto.PKey()
 k.generate_key(crypto.TYPE_RSA, 2048)
 cert = crypto.X509()
