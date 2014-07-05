@@ -172,8 +172,9 @@ class Proxy:
 		wclient.send(req)
 		self._log('request sent to host '+host)
 		response = self._recv_pipe(wclient, conn)
-		response_obj = HTTPResponse(response)
-		self.handle_flow(req_obj, response_obj, host)					
+		if response:
+			response_obj = HTTPResponse(response)
+			self.handle_flow(req_obj, response_obj, host)					
 		wclient.close()
 		self._log('connection to client and connection to host '+host+' closed')
 
