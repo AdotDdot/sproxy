@@ -284,6 +284,10 @@ class CertFactory:
 	def make_cert(self, pem_data):
 		old_cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem_data)
 		common_name = old_cert.get_subject().CN	
+		if os.path.isfile(os.path.join(self._files_dir, common_name+'.pem')):
+			certfile = os.path.join(self._files_dir, common_name+'.pem')
+			keyfile = os.path.join(self._files_dir, common_name+'.key')
+			return certfile, keyfile
 		pkey = crypto.PKey()
 		pkey.generate_key(crypto.TYPE_RSA, 2048)
 		new_cert = crypto.X509()
