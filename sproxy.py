@@ -250,7 +250,9 @@ class HTTPRequest:
 
 	def set_header(self, header, value):
 		self.headers[header] = value
-
+		headers = '\n'.join([header+': '+self.headers[header] for header in self.headers])
+		self.head = '\n'.join([self.first_line, headers])
+		
 	def make_raw(self):
 		first_line = ' '.join([self.method, self.url, self.protov])
 		headers = '\r\n'.join([header+': '+self.headers[header] for header in self.headers])
