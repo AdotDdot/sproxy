@@ -4,6 +4,8 @@ sproxy
 Simple customizable interception proxy written in python using the socket module.
 Capable of intercepting https traffic generating certificates on the fly.
 
+![sample output](http://i58.tinypic.com/whfx8g.jpg "Sample output")
+
 Setting up
 ==========
 Run *sproxy-setup.py*. It will set up the needed directories and files and create the self-signed CA certificate. The serial number of the certificate can be specified when running the script.
