@@ -10,7 +10,7 @@ Run *sproxy-setup.py*. It will set up the needed directories and files and creat
 
     python sproxy-setup.py [certserial]
     
-In order to allow https interception, you will need to register Sproxy as a trusted certificate authority in your browser.
+In order to allow https interception, you will need to register Sproxy as a trusted certificate authority in your browser: to do so, import as authority the file sproxy.pem, which you can find in the directory sproxy_files after running the setup script.
 
 Example usage
 =============
