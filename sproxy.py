@@ -79,7 +79,7 @@ class Proxy:
 			except KeyboardInterrupt:
 				if conn: conn.close()
 				serv_sock.close()
-				print("\n")
+				print "\n"
 				exit(0)
 
 	def _handle_conn(self, conn):	
