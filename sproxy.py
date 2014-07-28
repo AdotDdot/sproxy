@@ -60,6 +60,7 @@ class Proxy:
 	def start(self):
 		try:
 			serv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			serv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 			serv_sock.bind((self.serv_host, self.serv_port))
 			serv_sock.listen(self.max_listen)
 			print 'Proxy running on port', self.serv_port, ': listening'	
@@ -68,12 +69,18 @@ class Proxy:
 			sys.exit(1)
 		#mainloop
 		while True:
-			conn, addr = serv_sock.accept()
-			self._log('server connected by '+str(addr))
-			conn_thread = threading.Thread(target = self._handle_conn, args = (conn,))
-			try: conn_thread.start()
-			except: conn.close()
-		serv_sock.close()
+			try:
+				conn, addr = serv_sock.accept()
+				self._log('server connected by '+str(addr))
+				conn_thread = threading.Thread(target = self._handle_conn, args = (conn,))
+				conn_thread.daemon = 1
+				try: conn_thread.start()
+				except: conn.close()
+			except KeyboardInterrupt:
+				if conn: conn.close()
+				serv_sock.close()
+				print("\n")
+				exit(0)
 
 	def _handle_conn(self, conn):	
 		conn.settimeout(self.browser_timeout)
