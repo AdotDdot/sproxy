@@ -32,7 +32,7 @@ if not os.path.isfile(sid_file):
 	sid.write('0')
 	sid.close()
 
-#make root certificate in cache directory
+#make root certificate in files directory
 CERT_FILE = os.path.join(files_dir, "sproxy.pem")
 KEY_FILE = os.path.join(files_dir, "sproxy.key")
 k = crypto.PKey()
