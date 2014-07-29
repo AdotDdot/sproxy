@@ -209,7 +209,7 @@ class Proxy:
 				if to_conn:
 					try: to_conn.send(msg_pack)
 					except socket.error, (value, message):
-						print self._color_code('fail', '\nImpossible to send response: got error '+str(value)+' - '+message)
+						self._log('Impossible to send response: got error ', value, '-', message)
 						from_conn.close()
 						to_conn.close()
 						sys.exit(1)
