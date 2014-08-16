@@ -23,12 +23,12 @@ The proxy can be launched with default options from the command line. By default
 
 You can alter the requests sent modifying or overriding the Proxy class' method handle_reqs.
 For output customization, response parsing etc, you can modify or override the method handle_flow and handle_https_flow.
-
+Searching or modifying headers is case-insensitive.
 
     from sproxy import Proxy
     class MyProxy(Proxy):
       def handle_reqs(self, request):
-        request.set_header('User-Agent', 'sproxy')
+        request.set_header('user-agent', 'sproxy')
         
       def handle_flow(self, request, response, host):
         print request.head
