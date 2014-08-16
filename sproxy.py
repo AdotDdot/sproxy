@@ -21,7 +21,7 @@ import threading
 import ssl
 import os
 from OpenSSL import crypto
-from collections import OrderedDict
+from codict import COD as HeaderDict
 
 class Proxy:
 	def __init__(self, serv_port = 50007, certfile = "/etc/ssl/certs/ca-certificates.crt"):
@@ -247,7 +247,7 @@ class HTTPRequest:
 			self.head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').replace(b'\n\r\n\r', b'\n\n')).split('\n\n', 2)[0]
 			self.body = self.raw.replace(self.head.encode(), b'')	
 		self.first_line = str(self.head).splitlines()[0] if self.head else ''
-		self.headers = OrderedDict([x.split(': ', 1) for x in self.head.splitlines()[1:]]) if self.head else {}
+		self.headers = HeaderDict([x.split(': ', 1) for x in self.head.splitlines()[1:]]) if self.head else {}
 		if self.first_line: self.method, self.url, self.protov = self.first_line.split(' ', 2)
 		else:
 			self.method = ''
@@ -276,7 +276,7 @@ class HTTPResponse:
 		head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').replace(b'\n\r\n\r', b'\n\n')).split('\n\n', 2)[0]
 		body = self.raw.replace(head.encode(), b'')
 		first_line = head.splitlines()[0]
-		headers = dict(x.split(': ', 1) for x in head.splitlines()[1:])
+		headers = HeaderDict(x.split(': ', 1) for x in head.splitlines()[1:])
 		proto, status, status_text = first_line.split(' ', 2)
 		return (head, body, first_line, headers, proto, status, status_text)	
 
