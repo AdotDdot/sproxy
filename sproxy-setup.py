@@ -17,6 +17,7 @@
 
 from OpenSSL import crypto 
 import os
+import shutil
 from sys import argv
 
 serial = int(argv[1]) if len(argv) > 1 else 1
@@ -24,19 +25,19 @@ localcert = argv[2] if len(argv) > 2 else "/etc/ssl/certs/ca-certificates.crt"
 
 #make files directory
 files_dir = 'sproxy_files'
-if not os.path.isdir(files_dir): os.mkdir(files_dir)
+if os.path.isdir(files_dir): 
+	shutil.rmtree(files_dir)
+os.mkdir(files_dir)
 
 #make sid file in files directory to store last used serial number
 sid_file = os.path.join(files_dir, 'sid.txt')
-if not os.path.isfile(sid_file):
-	with open(sid_file, 'w') as sid:
-		sid.write('0')
+with open(sid_file, 'w') as sid:
+	sid.write('0')
 
 #make file to store path to local certificates
 loc_file = os.path.join(files_dir, 'localcerts.txt')
-if not os.path.isfile(loc_file):
-	with open(loc_file, 'wt') as loc:
-		loc.write(localcert)
+with open(loc_file, 'wt') as loc:
+	loc.write(localcert)
 
 #make root certificate in files directory
 CERT_FILE = os.path.join(files_dir, "sproxy.pem")
