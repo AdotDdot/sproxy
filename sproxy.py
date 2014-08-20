@@ -24,7 +24,7 @@ from OpenSSL import crypto
 from codict import COD as HeaderDict
 
 class Proxy:
-	def __init__(self, serv_port = 50007, certfile = "/etc/ssl/certs/ca-certificates.crt"):
+	def __init__(self, serv_port = 50007):
 		self.serv_host = ''
 		self.serv_port = serv_port
 		self.max_listen = 300
@@ -33,9 +33,9 @@ class Proxy:
 		self.web_timeout = 1
 		self.buffer_size = 4096
 		self.debug = False
-		self.certfile = certfile
 		self.stdout_lock = threading.Lock()
 		self._certfactory = CertFactory()
+		self._init_localcert()
 
 	def handle_reqs(self, request):
 		pass
@@ -214,6 +214,10 @@ class Proxy:
 						to_conn.close()
 						sys.exit(1)
 		return b''.join(msg)
+	
+	def _init_localcert(self):
+		with open(os.path.join('sproxy_files', 'localcerts.txt'), 'rt') as loc:
+			self.certfile = loc.read()
 
 	def _log(self, *args):
 		if self.debug: print ' '.join([str(arg) for arg in args])
