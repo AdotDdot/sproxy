@@ -8,17 +8,17 @@ Capable of intercepting https traffic generating certificates on the fly.
 
 Setting up
 ==========
-Run *sproxy-setup.py*. It will set up the needed directories and files and create the self-signed CA certificate. The serial number of the certificate can be specified when running the script.
+Run *sproxy-setup.py*. It will set up the needed directories and files and create the self-signed CA certificate. The serial number of the certificate can be specified when running the script. You might also need to provide the local certificates file. It defaults to */etc/ssl/certs/ca-certificates.crt*, the most widely used path in Linux systems. 
 
-    python sproxy-setup.py [certserial]
+    python sproxy-setup.py [certserial] [localcertfile]
     
-In order to allow https interception, you will need to register Sproxy as a trusted certificate authority in your browser: to do so, import as authority the file sproxy.pem, which you can find in the directory sproxy_files after running the setup script.
+Then, in order to allow https interception, you will need to register Sproxy as a trusted certificate authority in your browser: to do so, import as authority the file sproxy.pem, which you can find in the directory sproxy_files.
 
 Example usage
 =============
-The proxy can be launched with default options from the command line. By default is simply prints the first line of each request and response. The default port is 50007. You will need to provide the local certificates file. It defaults to */etc/ssl/certs/ca-certificates.crt*, the most widely used path in Linux systems. 
+The proxy can be launched with default options from the command line. By default is simply prints the first line of each request and response. The default port is 50007. 
     
-    python sproxy.py [port] [localcertfile]
+    python sproxy.py [port]
     
 
 You can alter the requests sent modifying or overriding the Proxy class' method handle_reqs.
