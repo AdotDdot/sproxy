@@ -39,7 +39,8 @@ class Proxy:
 
 	def handle_reqs(self, request):
 		pass
-
+	
+	#TODO clean up code
 	def handle_flow(self, request, response, host):
 		clength = str(response.headers['Content-Length'])+' bytes' if 'Content-Length' in response.headers else ''
 		ctype = response.headers['Content-Type'] if 'Content-Type' in response.headers else ''
@@ -246,18 +247,11 @@ class HTTPRequest:
 		self._set_parts()
 
 	def _set_parts(self):
-		try: self.head, self.body = self.raw.replace(b'\r\n\r\n', b'\n\n').replace(b'\n\r\n\r', b'\n\n').split('\n\n', 2)
-		except ValueError: 
-			self.head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').replace(b'\n\r\n\r', b'\n\n')).split('\n\n', 2)[0]
-			self.body = self.raw.replace(self.head.encode(), b'')	
-		self.first_line = str(self.head).splitlines()[0] if self.head else ''
-		self.headers = HeaderDict([x.split(': ', 1) for x in self.head.splitlines()[1:]]) if self.head else {}
-		if self.first_line: self.method, self.url, self.protov = self.first_line.split(' ', 2)
-		else:
-			self.method = ''
-			self.url = ''
-			self.protov = ''
-		return (self.head, self.body, self.first_line, self.headers, self.method, self.url, self.protov)
+		self.whole = self.raw.replace('\r', '\n').replace('\n\n', '\n')
+		self.head, self.body = self.whole.split('\n\n', 2)
+		self.first_line = self.head.splitlines()[0] 
+		self.headers = HeaderDict([x.split(': ', 1) for x in self.head.splitlines()[1:]]) 
+		self.method, self.url, self.protov = self.first_line.split(' ', 2)
 
 	def set_header(self, header, value):
 		self.headers[header] = value
@@ -268,10 +262,11 @@ class HTTPRequest:
 		first_line = ' '.join([self.method, self.url, self.protov])
 		headers = '\r\n'.join([header+': '+self.headers[header] for header in self.headers])
 		head = '\r\n'.join([first_line, headers])
-		return b'\r\n\r\n'.join([head.encode(), self.body])
+		return '\r\n\r\n'.join([head, self.body])
 
 
 class HTTPResponse:
+	#TODO clean up code
 	def __init__(self, raw_resp):
 		self.raw = raw_resp
 		self.head, self.body, self.first_line, self.headers, self.proto, self.status, self.status_text = self._set_parts()
