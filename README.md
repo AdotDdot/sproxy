@@ -55,4 +55,7 @@ Known issues
 * Certain websites require high timeout values when browsing over https.
 * Certain hosts return 404 responses for causes yet unknown.
 
-
+To do
+=====
+* Clean up code
+* Fix naming convention
