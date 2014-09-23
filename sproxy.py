@@ -20,106 +20,112 @@ import sys
 import threading
 import ssl
 import os
+import time
+import urlparse
 from OpenSSL import crypto
-from codict import COD as HeaderDict
+from _abcoll import *
+from operator import eq as _eq
+from itertools import imap as _imap
+try:
+    from thread import get_ident as _get_ident
+except ImportError:
+    from dummy_thread import get_ident as _get_ident
+
 
 class Proxy:
-	def __init__(self, serv_port = 50007):
+	def __init__(self, serv_port):
 		self.serv_host = ''
 		self.serv_port = serv_port
 		self.max_listen = 300
-		self.blacklist = []
-		self.browser_timeout = 1
-		self.web_timeout = 1
-		self.buffer_size = 4096
 		self.debug = False
-		self.stdout_lock = threading.Lock()
+		self.browser_timeout = 0.5
+		self.web_timeout = 0.5
+		self.buffer_size = 4096
+		self._stdout_lock = threading.Lock()
 		self._certfactory = CertFactory()
 		self._init_localcert()
-
-	def handle_reqs(self, request):
-		pass
-	
-	#TODO clean up code
-	def handle_flow(self, request, response, host):
-		clength = str(response.headers['Content-Length'])+' bytes' if 'Content-Length' in response.headers else ''
-		ctype = response.headers['Content-Type'] if 'Content-Type' in response.headers else ''
-		self.stdout_lock.acquire()
-		print '\n'+self._color_code('okgreen', request.first_line)
-		print '  '+self._color_code('okblue', response.first_line+'  '+clength+'  '+ctype)
-		self.stdout_lock.release()
-
-	def handle_https_flow(self, request, response, host):
-		clength = str(response.headers['Content-Length'])+' bytes' if 'Content-Length' in response.headers else ''
-		ctype = response.headers['Content-Type'] if 'Content-Type' in response.headers else ''
-		url = 'https://'+host+request.url
-		self.stdout_lock.acquire()
-		print '\n'+self._color_code('warn', request.first_line.replace(request.url, url, 1))
-		print '  '+self._color_code('okblue', response.first_line+'  '+clength+'  '+ctype)
-		self.stdout_lock.release()
 		
+	def modify_all(self, request):
+		'''Override to apply changes to every request'''
+		pass
+
+	def parse_response(self, response, host):
+		'''Override to handle received response - best used with concurrency'''
+                pass
+
+	def output_flow(self, request, response):
+		'''Override to change output'''
+		print '\n'+request.first_line
+		print response.first_line    
+
 	def start(self):
+		'''Start the proxy server'''
 		try:
 			serv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			serv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 			serv_sock.bind((self.serv_host, self.serv_port))
 			serv_sock.listen(self.max_listen)
-			print 'Proxy running on port', self.serv_port, ': listening'	
+			cname = serv_sock.getsockname()
+                        time.sleep(0.5)
+			print '\nProxy running on port %d - listening'%self.serv_port
 		except socket.error, (value, message):
-			print self._color_code('fail', 'Could not open socket: error '+str(value)+' - '+message)
+			self._log(cname, 'Could not open server socket: error %d %s'%(value,message))
 			sys.exit(1)
 		#mainloop
 		while True:
 			try:
 				conn, addr = serv_sock.accept()
-				self._log('server connected by '+str(addr))
+				self._log(cname, 'server connected by %s %s'%addr)
 				conn_thread = threading.Thread(target = self._handle_conn, args = (conn,))
 				conn_thread.daemon = 1
 				try: conn_thread.start()
 				except: conn.close()
 			except KeyboardInterrupt:
 				if conn: conn.close()
+				self._certfactory.cleanup()
 				serv_sock.close()
-				print "\n"
 				exit(0)
 
+	def _init_localcert(self):
+		with open(os.path.join('sproxy_files', 'localcerts.txt'), 'rt') as loc:
+			self.certfile = loc.read()
+
 	def _handle_conn(self, conn):	
+		#get request from browser
 		conn.settimeout(self.browser_timeout)
-		request = self._recv_pipe(conn)	
+                cname = conn.getsockname()
+		request = self._recv_pipe('browser', conn)	
 		if not request:
-			self._log('no request: closing')
+			self._log(cname, 'no request received from browser: closing socket')
 			conn.close()
 			sys.exit(1)	
 		#process request to allow for user changes
 		request_obj = HTTPRequest(request)
-		self.handle_reqs(request_obj)
-		request = request_obj.make_raw()
+		self._handle_reqs(request_obj)
+		request = request_obj.whole
 		tunneling = request_obj.method == 'CONNECT'
 		http_port = 443 if tunneling else 80
 		http_host = request_obj.headers['Host']
-		self._log('got host '+http_host+', port '+str(http_port))
-		#check blacklist
-		if http_host in self.blacklist:
-			self._log('host in blacklist: closing')
-			conn.close()
-			sys.exit(1) 		
+		self._log(cname, 'got host %s, port %d'%(http_host, http_port))		
 		#get and send response
-		if tunneling: self._https(http_host, http_port, conn)
-		else: self._send_resp(http_host, http_port, conn, request, request_obj)
+		if tunneling: self._get_https_resp(http_host, http_port, conn)
+		else: 
+                        self._get_http_resp(http_host, http_port, conn, request, request_obj)
 		conn.close()
 
-	def _https(self, host, port, conn):
+	def _get_https_resp(self, host, port, conn):
+                cname = conn.getsockname()
 		conn.send(b'HTTP/1.1 200 Connection estabilished\n\n')
 		wclient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		wclient = ssl.wrap_socket(wclient, server_side = False, ca_certs = self.certfile, cert_reqs = ssl.CERT_REQUIRED)
 		try: wclient.connect((host, port))
 		except ssl.SSLError, m: 
-			print self._color_code('fail', '\nCould not connect to', host, m)
+			self._log(cname, 'could not connect to %s: %s'%(host, m))
 			wclient.close()
 			conn.close()
 			sys.exit(1)
 		except socket.error, (v, m):
-			print self._color_code('fail', '\nCould not connect to:', host, 'socket error', v, m)
+			self._log(cname, 'could not connect to %s: socket error %d %s'%(host, v, m))
 			wclient.close()
 			conn.close()
 			sys.exit(1)
@@ -129,129 +135,129 @@ class Proxy:
 		certfile, keyfile = self._certfactory.make_cert(pem_data)
 		try: conn = ssl.wrap_socket(conn, server_side = True, certfile = certfile, keyfile= keyfile)
 		except ssl.SSLError, m: 
-			self._log('Could not complete ssl handshacke with client:', m)
+			self._log(cname, 'could not complete ssl handshacke with browser client: %s'%m)
 			wclient.close()
 			conn.close()
 			sys.exit(1)
 		except socket.error, (v, m):
-			self._log('socket error: '+str(v)+' '+m)
+			self._log(cname, ('could not complete ssl handshake with browser client: socket error %d - %s'%(v, m)))
 			wclient.close()
 			conn.close()
 			sys.exit(1)
 		#get plain text data
-		request = self._recv_pipe(conn)
+		request = self._recv_pipe(host, conn)
 		if not request:
 			wclient.close()
 			conn.close()	
 			sys.exit(1)	
-		request_obj = HTTPRequest(request)
-		self.handle_reqs(request_obj)
-		request = request_obj.make_raw()
+		request_obj = HTTPRequest(request, https=True)
+		self._handle_reqs(request_obj)
+		request = request_obj.whole
 		wclient.send(request)
-		try: 
-			response = self._recv_pipe(wclient, conn)
-			if response: 
-				response_obj = HTTPResponse(response)
-				self.handle_https_flow(request_obj, response_obj, host)
-		except ssl.SSLError, m: self._log(str(m))
-		except socket.error, (v, m): self._log(host+ ' - Error '+str(v)+' '+m)
-		finally:
-			wclient.close()
-			conn.close()
+		response = self._recv_pipe(host, wclient, conn)
+		if response: 
+			response_obj = HTTPResponse(response)
+			self._handle_response(request_obj, response_obj, host)
+		wclient.close()
+		conn.close()
 		
-	def _send_resp(self, host, port, conn, req, req_obj):
+	def _get_http_resp(self, host, port, conn, req, req_obj):
+                cname = conn.getsockname()
 		wclient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		self._log('client to host '+host+' initialized')
+		self._log(cname, 'client to host %s initialized'%host)
 		wclient.settimeout(self.web_timeout)
 		try:
-			hostip = socket.gethostbyname(host)
-			wclient.connect((hostip, port))
-			self._log('client to host '+host+' connected')
+			wclient.connect((host, port))
+			self._log(cname, 'client to host %s connected'%host)
 		except socket.timeout:
-			print self._color_code('fail', '\nImpossible to connect to '+host+': socket timed out')
+			self._log(cname, 'could not connect to %s: socket timed out'%host)
 			wclient.close()
 			conn.close()
 			sys.exit(1)
 		except socket.error, (value, message):
-			print self._color_code('fail', '\nSocket error '+str(value)+' '+message+' on '+host)
+			self._log(cname, 'could not connect to %s: socket error error %d %s'%(host, value, message))
 			wclient.close()
 			conn.close()
 			sys.exit(1)
 		wclient.send(req)
-		self._log('request sent to host '+host)
-		response = self._recv_pipe(wclient, conn)
+		self._log(cname, 'request sent to host %s'%host)
+		response = self._recv_pipe(host, wclient, conn)
 		if response:
 			response_obj = HTTPResponse(response)
-			self.handle_flow(req_obj, response_obj, host)					
+			self._handle_response(req_obj, response_obj, host)					
 		wclient.close()
-		self._log('connection to client and connection to host '+host+' closed')
+		self._log(cname, 'connection to client and connection to host %s closed'%host)
 
-	def _recv_pipe(self, from_conn, to_conn = ''):
+	def _recv_pipe(self, source, from_conn, to_conn = ''):
 		msg = []
+                cname = from_conn.getsockname()
 		gotnull = 0
 		while True:
 			try:
 				msg_pack = from_conn.recv(self.buffer_size)
 			except ssl.SSLError, m:
-				self._log('ssl error '+str(m))
+				self._log(cname, 'ssl error occured while receiving data from %s: %s'%(source, m))
 				break
 			except socket.timeout:
-				self._log('timeout on receiving data packet: breaking loop')
 				break
 			except socket.error, (v, m):
-				self._log('socket error '+str(v)+' '+m)
+				self._log(cname, 'socket error %d occurred while receiving data from %s - %s'%(v, source, m))
 				break
 			if not msg_pack:
-				if gotnull: self._log('no more data: breaking loop'); break
+				if gotnull: 
+					break
 				else: gotnull = 1
 			else:
-				self._log('got data packet of len '+str(len(msg_pack)))
 				msg.append(msg_pack)
 				if to_conn:
 					try: to_conn.send(msg_pack)
 					except socket.error, (value, message):
-						self._log('Impossible to send response: got error ', value, '-', message)
+						self._log(cname, 'could not send response from %s to %s: socket error %d - %s'%(source, (to_conn.getsockname()), value, message))
 						from_conn.close()
 						to_conn.close()
 						sys.exit(1)
 		return b''.join(msg)
-	
-	def _init_localcert(self):
-		with open(os.path.join('sproxy_files', 'localcerts.txt'), 'rt') as loc:
-			self.certfile = loc.read()
 
-	def _log(self, *args):
-		if self.debug: print ' '.join([str(arg) for arg in args])
-		else: pass
+	def _log(self, cname, content):
+                if self.debug: 
+			self._stdout_lock.acquire()
+			print '%f  '%time.time(), ('[%s %d]'%cname).ljust(25), content
+			self._stdout_lock.release()
 
-	def _color_code(self, code, *args):
-		line = ' '.join([str(arg) for arg in args])	
-		if not sys.stdout.isatty(): return line
-		else:
-			endb = "\033[0m"
-			if code == 'fail': return '\033[1;91m'+line+endb
-			elif code == 'warn': return '\033[1;93m'+line+endb
-			elif code == 'okgreen': return '\033[1;92m'+line+endb
-			elif code == 'okblue': return '\033[1;94m'+line+endb
-			elif code == 'pblue': return '\033[94m'+line+endb
-			elif code == 'pgreen': return '\033[92m'+line+endb
-			elif code == 'pyell': return '\033[93m'+line+endb
-			elif code == 'bmag': return '\033[1;95m'+line+endb
-			elif code == 'pcyan': return '\033[37m'+line+endb
-			else: return line
+	def _handle_reqs(self, request):
+		#apply changes
+		self.modify_all(request)
+		#reset request
+		request.whole = request.make_raw()
+		       
+	def _handle_response(self, request, response, host):
+		'''After response has been received'''
+		self._stdout_lock.acquire()
+                self.output_flow(request, response)
+		self._stdout_lock.release()
+                self.parse_response(response, host)
 
-
+                         
 class HTTPRequest:
-	def __init__(self, raw_req):
-		self.raw = raw_req
+	def __init__(self, raw_req, https = False):
+		self.https = https
+		self.on_hold = False
+		self.whole = raw_req.replace('\r', '\n').replace('\n\n', '\n')
 		self._set_parts()
+		self._decode_body()
 
 	def _set_parts(self):
-		self.whole = self.raw.replace('\r', '\n').replace('\n\n', '\n')
-		self.head, self.body = self.whole.split('\n\n', 2)
-		self.first_line = self.head.splitlines()[0] 
-		self.headers = HeaderDict([x.split(': ', 1) for x in self.head.splitlines()[1:]]) 
-		self.method, self.url, self.protov = self.first_line.split(' ', 2)
+                self.head, self.body = self.whole.split('\n\n')
+		self.first_line = str(self.head).splitlines()[0]
+		self.headers = HeaderDict([x.split(': ', 1) for x in self.head.splitlines()[1:]])
+                self.method, self.url, self.protov = self.first_line.split(' ', 2)
+		if self.https: self.url = 'https://'+self.headers['host']+self.url
+
+	def _decode_body(self): 
+		if self.body and 'Content-Type' in self.headers and 'application/x-www-form-urlencoded' in self.headers['Content-Type']:
+			self.decoded_body = '\n'.join(['[Url-encoded]']+[': '.join(t) for t in urlparse.parse_qsl(self.body.strip('\n'))])
+		else:
+			self.decoded_body = self.body
 
 	def set_header(self, header, value):
 		self.headers[header] = value
@@ -259,25 +265,24 @@ class HTTPRequest:
 		self.head = '\n'.join([self.first_line, headers])
 		
 	def make_raw(self):
+		#put all parts back together
 		first_line = ' '.join([self.method, self.url, self.protov])
 		headers = '\r\n'.join([header+': '+self.headers[header] for header in self.headers])
-		head = '\r\n'.join([first_line, headers])
-		return '\r\n\r\n'.join([head, self.body])
+		head = '\r\n'.join([first_line, headers]) 
+		return '\r\n\r\n'.join([head, self.body]) 
 
 
 class HTTPResponse:
-	#TODO clean up code
 	def __init__(self, raw_resp):
 		self.raw = raw_resp
-		self.head, self.body, self.first_line, self.headers, self.proto, self.status, self.status_text = self._set_parts()
+		self._set_parts()
 
 	def _set_parts(self):
-		head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').replace(b'\n\r\n\r', b'\n\n')).split('\n\n', 2)[0]
-		body = self.raw.replace(head.encode(), b'')
-		first_line = head.splitlines()[0]
-		headers = HeaderDict(x.split(': ', 1) for x in head.splitlines()[1:])
-		proto, status, status_text = first_line.split(' ', 2)
-		return (head, body, first_line, headers, proto, status, status_text)	
+		self.head = str(self.raw.replace(b'\r\n\r\n', b'\n\n').replace(b'\n\r\n\r', b'\n\n')).split('\n\n', 2)[0]
+		self.body = self.raw.replace(self.head.encode(), b'').replace('\n\n', '')
+		self.first_line = self.head.splitlines()[0]
+		self.headers = HeaderDict(x.split(': ', 1) for x in self.head.splitlines()[1:])
+		self.protov, self.status, self.status_text = self.first_line.split(' ', 2)
 
 
 class CertFactory:
@@ -325,16 +330,178 @@ class CertFactory:
 		with open(certfile, 'at') as ccf: ccf.write(crypto.dump_certificate(crypto.FILETYPE_PEM, self.root_cert)) 		
 		return certfile, keyfile
 
-	def __del__(self):
+	def cleanup(self):
+		#update count of last serial number used
 		with open(self._sid, 'wt') as sid:
 			self._count_lock.acquire()
 			sid.write(str(self._count))
 			self._count_lock.release()
 
 
+class HeaderDict(dict):
+    '''Caseless Ordered Dictionary
+    Enables case insensitive searching and updating while preserving case sensitivity when keys are listed.
+    Combination of the code of collections.OrderedDict and CaselessDictionary (https://gist.github.com/bloomonkey/3003096) '''
+    
+    def __init__(self, *args, **kwds):
+        if len(args) > 1:
+            raise TypeError('expected at most 1 arguments, got %d' % len(args))
+        try:
+            self.__root
+        except AttributeError:
+            self.__root = root = []                   
+            root[:] = [root, root, None]
+            self.__map = {}
+        self.__update(*args, **kwds)
+
+    def __contains__(self, key):
+        return dict.__contains__(self, key.lower())
+  
+    def __getitem__(self, key):
+        return dict.__getitem__(self, key.lower())['val'] 
+
+    def __setitem__(self, key, value, dict_setitem=dict.__setitem__):
+        if key not in self:
+            root = self.__root
+            last = root[0]
+            last[1] = root[0] = self.__map[key] = [last, root, key]
+        return dict.__setitem__(self, key.lower(), {'key': key, 'val': value})
+
+    def __delitem__(self, key, dict_delitem=dict.__delitem__):
+        dict_delitem(self, key)
+        link_prev, link_next, _ = self.__map.pop(key)
+        link_prev[1] = link_next                        
+        link_next[0] = link_prev                       
+
+    def __iter__(self):
+        root = self.__root
+        curr = root[1]                                  
+        while curr is not root:
+            yield curr[2]                              
+            curr = curr[1]                         
+
+    def __reversed__(self):
+        root = self.__root
+        curr = root[0]                                
+        while curr is not root:
+            yield curr[2]                             
+            curr = curr[0]                       
+
+    def clear(self):
+        root = self.__root
+        root[:] = [root, root, None]
+        self.__map.clear()
+        dict.clear(self)
+
+    def keys(self):
+        return list(self)
+
+    def values(self):
+        return [self[key] for key in self]
+
+    def items(self):
+        return [(key, self[key]) for key in self]
+
+    def iterkeys(self):
+        return iter(self)
+
+    def itervalues(self):
+        for k in self:
+            yield self[k]
+
+    def iteritems(self):
+        for k in self:
+            yield (k, self[k])
+
+    def get(self, key, default=None):
+        try:
+            v = dict.__getitem__(self, key.lower())
+        except KeyError:
+            return default
+        else:
+            return v['val']
+
+    def has_key(self,key):
+        return key in self
+
+    update = MutableMapping.update
+
+    __update = update 
+
+    __marker = object()
+
+    def pop(self, key, default=__marker):
+        if key in self:
+            result = self[key]
+            del self[key]
+            return result
+        if default is self.__marker:
+            raise KeyError(key)
+        return default
+
+    def setdefault(self, key, default=None):
+        if key in self:
+            return self[key]
+        self[key] = default
+        return default
+
+    def popitem(self, last=True):
+        if not self:
+            raise KeyError('dictionary is empty')
+        key = next(reversed(self) if last else iter(self))
+        value = self.pop(key)
+        return key, value
+
+    def __repr__(self, _repr_running={}):
+        call_key = id(self), _get_ident()
+        if call_key in _repr_running:
+            return '...'
+        _repr_running[call_key] = 1
+        try:
+            if not self:
+                return '%s()' % (self.__class__.__name__,)
+            return '%s(%r)' % (self.__class__.__name__, self.items())
+        finally:
+            del _repr_running[call_key]
+
+    def __reduce__(self):
+        items = [[k, self[k]] for k in self]
+        inst_dict = vars(self).copy()
+        for k in vars(OrderedDict()):
+            inst_dict.pop(k, None)
+        if inst_dict:
+            return (self.__class__, (items,), inst_dict)
+        return self.__class__, (items,)
+
+    def copy(self):
+        return self.__class__(self)
+
+    @classmethod
+    def fromkeys(cls, iterable, value=None):
+        self = cls()
+        for key in iterable:
+            self[key] = value
+        return self
+
+    def __eq__(self, other):
+        if isinstance(other, OrderedDict):
+            return dict.__eq__(self, other) and all(_imap(_eq, self, other))
+        return dict.__eq__(self, other)
+
+    def __ne__(self, other):
+        return not self == other
+
+    def viewkeys(self):
+        return KeysView(self)
+
+    def viewvalues(self):
+        return ValuesView(self)
+
+    def viewitems(self):
+        return ItemsView(self)
+
+
 if __name__ == '__main__':
-  serv_port = int(sys.argv[1]) if len(sys.argv) > 1 else 50007
-  certfile = sys.argv[2] if len(sys.argv) > 2 else "/etc/ssl/certs/ca-certificates.crt"
-  proxy = Proxy(serv_port, certfile)
-  proxy.browser_timeout = 1
-  proxy.start()
+	serv_port = int(sys.argv[1]) if len(sys.argv) > 1 else 50007
+	proxy = Proxy(serv_port)
+	proxy.start()
