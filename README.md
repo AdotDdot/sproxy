@@ -4,58 +4,49 @@ sproxy
 Simple customizable interception proxy written in python using the socket module.
 Capable of intercepting https traffic generating certificates on the fly.
 
-![sample output](http://i58.tinypic.com/whfx8g.jpg "Sample output")
 
 Setting up
 ==========
-Run *sproxy-setup.py*. It will set up the needed directories and files and create the self-signed CA certificate. The serial number of the certificate can be specified when running the script. You might also need to provide the local certificates file. It defaults to */etc/ssl/certs/ca-certificates.crt*, the most widely used path in Linux systems. 
-
-    python sproxy-setup.py [certserial] [localcertfile]
-    
-Then, in order to allow https interception, you will need to register Sproxy as a trusted certificate authority in your browser: to do so, import as authority the file sproxy.pem, which you can find in the directory sproxy_files.
+  * Run *sproxy-setup.py*. It will create the needed directories and create the self-signed SSL certificate. You may specify the local certificates file path (defaults to */etc/ssl/certs/ca-certificates.crt*) and the serial number of the self-signed certificate (defaults to 1).
+  `python sproxy-setup.py [localcert] [serial]`
+  * In the newly-created directory *sproxy_files* you can find the certificate file *sproxy.pem*. Import it in your browser as a trusted certificate authority.
+  * Configure your browser to use the proxy and run *sproxy.py*. You can specify the port in the command-line arguments (defaults to 50007).
+  `python sproxy.py [port]`
 
 Example usage
 =============
-The proxy can be launched with default options from the command line. By default is simply prints the first line of each request and response. The default port is 50007. 
-    
-    python sproxy.py [port]
-    
+The proxy can be launched with default options from the command line. By default is simply prints the first line of each request and response.
 
-You can alter the requests sent modifying or overriding the Proxy class' method handle_reqs.
-For output customization, response parsing etc, you can modify or override the method handle_flow and handle_https_flow.
-Searching or modifying headers is case-insensitive.
+Override the Proxy class' methods to customize behaviour. Example:
 
     from sproxy import Proxy
     class MyProxy(Proxy):
-      def handle_reqs(self, request):
-        request.set_header('user-agent', 'sproxy')
+      def modify_all(self, request):
+        '''Override to apply changes to every request'''
+        request.set_header('user-agent', 'sproxy') #modify header on all oncoming requests
         
-      def handle_flow(self, request, response, host):
-        print request.head
+      def output_flow(self, request, response):
+        '''Override to change output'''
+        print request.head #print the whole head of request and response
         print response.head
         
-    def handle_https_flow(self, request, response, host):
-        print request.head
-        print response.head
-    
+      def parse_response(self, response, host):
+        '''Override to handle received response - best used with concurrency'''
+        new_thread = threading.Thread(target=user_defined_function) #start a new thread with some newly-defined function
+        new_thread.start()
+        
     proxy = MyProxy()
-    
     #set some options
-    proxy.blacklist = ['www.google.com', 'www.yahoo.com'] 
     proxy.serv_port = 10000
+    proxy.max_listen = 200
     #change timeouts to alter performance
-    proxy.web_timeout = 0.5
-    proxy.browser_timeout = 0.5 
-    
+    proxy.web_timeout = 1
+    proxy.browser_timeout = 1
     #launch proxy
     proxy.start()
 
 Known issues
 ===========
 * Certain websites require high timeout values when browsing over https.
-* Certain hosts return 404 responses for causes yet unknown.
+* Certain hosts return 4xx responses when browsing through the proxy.
 
-To do
-=====
-* Clean up code
-* Fix naming convention
