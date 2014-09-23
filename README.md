@@ -46,8 +46,5 @@ Override the Proxy class' methods to customize behaviour. Example:
     #launch proxy
     proxy.start()
 
-Known issues
-===========
-* Certain websites require high timeout values when browsing over https.
-* Certain hosts return 4xx responses when browsing through the proxy.
+
 
