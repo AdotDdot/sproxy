@@ -1,7 +1,7 @@
 sproxy
 ======
 
-Simple customizable interception proxy written in python using the socket module.
+Basic interception proxy written in python using the socket module.
 Capable of intercepting https traffic generating certificates on the fly.
 
 For a more complete program, see [sprox](https://github.com/AdotDdot/sprox) (based on sproxy).
