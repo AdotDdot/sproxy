@@ -225,7 +225,10 @@ class Proxy:
 			self._stdout_lock.release()
 
 	def _handle_reqs(self, request):
-		#apply changes
+		#decrease value of max-forward header
+		if "Max-Forward" in request.headers:
+			request.headers["Max-Forwards"] = str(int(request.headers["Max-Forwards"])-1)
+		#apply user-defined changes
 		self.modify_all(request)
 		#reset request
 		request.whole = request.make_raw()
