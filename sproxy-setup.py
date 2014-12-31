@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 #
 # sproxy-setup.py
+# not a distutil setup
+#
 # Copyright (C) 2014 by A.D. <adotddot1123@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
